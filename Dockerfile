@@ -11,11 +11,11 @@ ENV STARTDELAY=$STARTDELAY
 # Install gstreamer dependencies 
 RUN sudo apt-get update && sudo apt-get install -y  git python3-catkin-tools 
 
-RUN sudo apt-get install -y python3 python3-pip ros-noetic-rospy ros-noetic-cv-bridge
+RUN sudo apt-get install -y python3 python3-pip ros-noetic-rospy ros-noetic-cv-bridge ros-noetic-tf
 
 
 COPY requirements.txt /
-COPY aruco.py  /
+COPY controller.py /
 
 RUN pip3 install --upgrade pip setuptools wheel
 
