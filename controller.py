@@ -13,10 +13,12 @@ from math import cos, exp, pi, sin
 
 
 
-global V_Q,V_I
+global V_Q,V_I, error
 global orientation 
 
 # init orientation matrix with rotation matrix representing 0 yaw
+
+error = 0
 
 orientation = Quaternion()
 
@@ -41,7 +43,7 @@ def Feature_vec(data):
         global V_Q
         global orientation
         global V_I
-
+        global error 
         # Image measurements of point features 
         s = data.data
 
@@ -78,8 +80,13 @@ def Feature_vec(data):
         s_v_star = np.array([x_n_star,y_n_star,a_n_star])
         
         e_v = np.subtract(s_v,s_v_star)
+        
+        K = np.array([0.2, 0.2, 0.05])
+                            
+        # e_v is 3x1 error vector
+       
 
-        V_c_body =  k*e_v
+        V_c_body =  K*e_v
 
   
         # Transforming to inertial NED frame
@@ -93,10 +100,10 @@ def Feature_vec(data):
         
         V_I = np.dot(R,V_c_body)
        
-        w_z =  0
-     
-        V_Q = np.array([V_I[1],V_I[0],0,0,0,0])
-        print(V_Q)
+        
+        
+        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,0])
+        error = e_v
 
 
 
@@ -105,11 +112,12 @@ def Feature_vec(data):
 def Controller():
     global V_Q
     global orientation
+    global error
     rospy.init_node("IBVS_Control", anonymous=False)
     rospy.Subscriber("/aruco_coordinates", Int32MultiArray, Feature_vec)
+    # make tracking error publisher
+    err_pub = rospy.Publisher("/tracking_error", Float32, queue_size=10)
     
-    # publish to mavros NED frame
-
     vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
 
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
@@ -149,6 +157,8 @@ def Controller():
          vel_cmd.twist.angular.x = 0.0
          vel_cmd.twist.angular.y = 0.0
          vel_pub.publish(vel_cmd)
+         err_pub.publish(error)
+
          rate.sleep()
 
     try:
