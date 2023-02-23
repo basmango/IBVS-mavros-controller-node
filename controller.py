@@ -18,7 +18,7 @@ global orientation
 
 # init orientation matrix with rotation matrix representing 0 yaw
 
-error = 0
+error = "[0,0,0,0,0,0]"
 
 orientation = Quaternion()
 
@@ -35,8 +35,8 @@ def pose_callback(pose):
 def Feature_vec(data):
      
         # Parameters
-        cu = 623.34142635
-        cv = 379.92637936
+        cu = 640
+        cv = 360
         f =  732.83433467 # Pixels
         k = 0.1
 
@@ -74,14 +74,14 @@ def Feature_vec(data):
         x_n = (a_n/f)*x_g
         y_n = (a_n/f)*y_g
         s_v = np.array([x_n,y_n,a_n])
-        a_n_star = h_d
+        a_n_star = h_d 
         x_n_star = (a_n_star/f)*x_g_star
         y_n_star = (a_n_star/f)*y_g_star
         s_v_star = np.array([x_n_star,y_n_star,a_n_star])
         
         e_v = np.subtract(s_v,s_v_star)
         
-        K = np.array([0.2, 0.2, 0.05])
+        K = np.array([0.2, 0.2, 0.1])
                             
         # e_v is 3x1 error vector
        
@@ -103,8 +103,8 @@ def Feature_vec(data):
         
         
         V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,0])
-        error = e_v
-
+        error = str(e_v) + " / " + str(V_Q)
+        print(error)
 
 
 
@@ -116,7 +116,7 @@ def Controller():
     rospy.init_node("IBVS_Control", anonymous=False)
     rospy.Subscriber("/aruco_coordinates", Int32MultiArray, Feature_vec)
     # make tracking error publisher
-    err_pub = rospy.Publisher("/tracking_error", Float32, queue_size=10)
+    err_pub = rospy.Publisher("/tracking_error", String, queue_size=10)
     
     vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
 
@@ -128,6 +128,7 @@ def Controller():
          #print(data)
          vel_cmd = TwistStamped()
          v_lin_max = 1
+         v_lin_max_z = 0.6
          v_ang_max = pi/3
          if data[0]>v_lin_max:
                 vel_cmd.twist.linear.x = v_lin_max
@@ -141,10 +142,10 @@ def Controller():
                 vel_cmd.twist.linear.y = -v_lin_max
          else:
                 vel_cmd.twist.linear.y = data[1]
-         if data[2]>v_lin_max:
-                vel_cmd.twist.linear.z = v_lin_max
-         elif data[2]<-v_lin_max:
-                vel_cmd.twist.linear.z = -v_lin_max
+         if data[2]>v_lin_max_z:
+                vel_cmd.twist.linear.z = v_lin_max_z
+         elif data[2]<-v_lin_max_z:
+                vel_cmd.twist.linear.z = -v_lin_max_z
          else:
                 vel_cmd.twist.linear.z = data[2]
          if data[5]>v_ang_max:
@@ -158,7 +159,7 @@ def Controller():
          vel_cmd.twist.angular.y = 0.0
          vel_pub.publish(vel_cmd)
          err_pub.publish(error)
-
+       
          rate.sleep()
 
     try:
