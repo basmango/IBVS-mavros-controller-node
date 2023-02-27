@@ -15,11 +15,11 @@ RUN sudo apt-get install -y python3 python3-pip ros-noetic-rospy ros-noetic-cv-b
 
 
 COPY requirements.txt /
-COPY controller.py /
 
 RUN pip3 install --upgrade pip setuptools wheel
 
 RUN pip3 install -r requirements.txt
+COPY controller.py /
 
 COPY entrypoint.sh /
 RUN chmod +x /entrypoint.sh

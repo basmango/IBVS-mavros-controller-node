@@ -16,9 +16,8 @@ from math import cos, exp, pi, sin
 global V_Q,V_I, error
 global orientation 
 
-# init orientation matrix with rotation matrix representing 0 yaw
 
-error = "[0,0,0,0,0,0]"
+error  = np.array([0,0,0,0,0,0],dtype=np.float32)
 
 orientation = Quaternion()
 
@@ -37,8 +36,9 @@ def Feature_vec(data):
         # Parameters
         cu = 640
         cv = 360
-        f =  732.83433467 # Pixels
-        k = 0.1
+        f =  898 # Pixels
+        K = np.array([0.2, 0.2, 0.1])
+        k_yaw = 0.1
 
         global V_Q
         global orientation
@@ -69,7 +69,7 @@ def Feature_vec(data):
         a = (np.square(vs1[0]-x_g) + np.square(vs1[1]-y_g)) + (np.square(vs2[0]-x_g) + np.square(vs2[1]-y_g)) + (np.square(vs3[0]-x_g) + np.square(vs3[1]-y_g)) + (np.square(vs4[0]-x_g) + np.square(vs4[1]-y_g)); 
 
         a_d = (np.square(s_star[0]-x_g_star) + np.square(s_star[1]-y_g_star)) + (np.square(s_star[2]-x_g_star) + np.square(s_star[3]-y_g_star)) + (np.square(s_star[4]-x_g_star) + np.square(s_star[5]-y_g_star)) + (np.square(s_star[6]-x_g_star) + np.square(s_star[7]-y_g_star));
-
+        
         a_n = (h_d)*np.sqrt(a_d/a)
         x_n = (a_n/f)*x_g
         y_n = (a_n/f)*y_g
@@ -80,12 +80,22 @@ def Feature_vec(data):
         s_v_star = np.array([x_n_star,y_n_star,a_n_star])
         
         e_v = np.subtract(s_v,s_v_star)
-        
-        K = np.array([0.2, 0.2, 0.1])
-                            
-        # e_v is 3x1 error vector
-       
 
+
+
+
+        # calculate arctan of orientation
+        alpha = np.arctan2(vs1[1]-vs3[1],vs1[0]-vs3[0])
+
+
+        alpha_star = np.arctan2(s_star[1]-s_star[5],s_star[0]-s_star[4])            
+        
+        heading_error = alpha - alpha_star
+
+        
+        
+        
+        # e_v is 3x1 error vector
         V_c_body =  K*e_v
 
   
@@ -98,12 +108,17 @@ def Feature_vec(data):
                             [sin(yaw), cos(yaw), 0],
                             [0, 0, 1]])
         
+        
+        # apply rotation matrix to V_c_body
         V_I = np.dot(R,V_c_body)
-       
-        
-        
-        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,0])
-        error = str(e_v) + " / " + str(V_Q)
+
+        V_omega = np.array([0,0,k_yaw * heading_error])
+                
+        V_I = np.append(V_I,V_omega)
+
+        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,V_I[5]])
+        # make 6x1 array for errors 
+        error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])     
         print(error)
 
 
@@ -115,9 +130,7 @@ def Controller():
     global error
     rospy.init_node("IBVS_Control", anonymous=False)
     rospy.Subscriber("/aruco_coordinates", Int32MultiArray, Feature_vec)
-    # make tracking error publisher
-    err_pub = rospy.Publisher("/tracking_error", String, queue_size=10)
-    
+    err_pub = rospy.Publisher("/tracking_error", Float32MultiArray, queue_size=10)
     vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
 
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
@@ -155,11 +168,14 @@ def Controller():
          else:
                 vel_cmd.twist.angular.z = data[5]
 
-         vel_cmd.twist.angular.x = 0.0
-         vel_cmd.twist.angular.y = 0.0
+         #vel_cmd.twist.angular.x = 0.0
+         #vel_cmd.twist.angular.y = 0.0
          vel_pub.publish(vel_cmd)
-         err_pub.publish(error)
-       
+         # publish tracking error
+         err = Float32MultiArray()
+         err.data = error
+         err_pub.publish(err)
+         
          rate.sleep()
 
     try:
