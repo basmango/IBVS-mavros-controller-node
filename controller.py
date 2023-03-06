@@ -36,9 +36,9 @@ def Feature_vec(data):
         # Parameters
         cu = 640
         cv = 360
-        f =  898 # Pixels
-        K = np.array([0.2, 0.2, 0.1])
-        k_yaw = 0.1
+        f =  954 # Pixels
+        K = np.array([0.22, 0.22, 0.2])
+        k_yaw = -0.2
 
         global V_Q
         global orientation
@@ -47,7 +47,7 @@ def Feature_vec(data):
         # Image measurements of point features 
         s = data.data
 
-        pt_star = np.array([566.00, 283.00, 719.00, 326.00,675.00, 480.00,520.0,435.0]) #Desired pixel points location
+        pt_star = np.array([703.00, 413.00, 589.00, 423.00, 579.00, 307.00, 694.00, 298.00]) #Desired pixel points location
 
         s_star = pt_star - np.array([cu,cv,cu,cv,cu,cv,cu,cv])
 
@@ -90,10 +90,10 @@ def Feature_vec(data):
 
         alpha_star = np.arctan2(s_star[1]-s_star[5],s_star[0]-s_star[4])            
         
-        heading_error = alpha - alpha_star
 
-        
-        
+        heading_error = np.arctan2(np.sin(alpha-alpha_star), np.cos(alpha-alpha_star))
+
+        print(heading_error)
         
         # e_v is 3x1 error vector
         V_c_body =  K*e_v
@@ -116,7 +116,8 @@ def Feature_vec(data):
                 
         V_I = np.append(V_I,V_omega)
 
-        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,V_I[5]])
+        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,k_yaw * heading_error])
+        
         # make 6x1 array for errors 
         error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])     
         print(error)
@@ -135,7 +136,7 @@ def Controller():
 
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
     rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
-    rate = rospy.Rate(30) # 25hz
+    rate = rospy.Rate(60) # 25hz
     while not rospy.is_shutdown():
          data = V_Q #np.array([0,0,0,0,0,0])
          #print(data)
@@ -160,14 +161,14 @@ def Controller():
          elif data[2]<-v_lin_max_z:
                 vel_cmd.twist.linear.z = -v_lin_max_z
          else:
-                vel_cmd.twist.linear.z = data[2]
+                vel_cmd.twist.linear.z =  data[2]
          if data[5]>v_ang_max:
                 vel_cmd.twist.angular.z = v_ang_max
          elif data[5]<-v_ang_max:
                 vel_cmd.twist.angular.z = -v_ang_max
          else:
                 vel_cmd.twist.angular.z = data[5]
-
+       
          #vel_cmd.twist.angular.x = 0.0
          #vel_cmd.twist.angular.y = 0.0
          vel_pub.publish(vel_cmd)
