@@ -2,9 +2,10 @@
 import rospy
 import sys
 import numpy as np
+from mavros_msgs.msg import PositionTarget
 from std_msgs.msg import *
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import Twist, Quaternion,PoseStamped,TwistStamped
+from geometry_msgs.msg import Quaternion,PoseStamped
 from nav_msgs.msg import Odometry
 import time
 import math
@@ -13,13 +14,10 @@ from math import cos, exp, pi, sin
 
 
 
-global V_Q,V_I, error
-global orientation 
-
+global V_Q,V_I, error, err_pub
+err_pub = rospy.Publisher("/tracking_error", Float32MultiArray, queue_size=10)
 
 error  = np.array([0,0,0,0,0,0],dtype=np.float32)
-
-orientation = Quaternion()
 
 V_Q = np.array([0,0,0,0,0,0])
 
@@ -37,7 +35,9 @@ def Feature_vec(data):
         cu = 640
         cv = 360
         f =  954 # Pixels
-        K = np.array([0.22, 0.22, 0.2])
+#        K = np.array([0.4, 0.4, 0.23])
+
+        K = np.array([0.41, 0.41, 0.4])
         k_yaw = -0.2
 
         global V_Q
@@ -47,7 +47,7 @@ def Feature_vec(data):
         # Image measurements of point features 
         s = data.data
 
-        pt_star = np.array([703.00, 413.00, 589.00, 423.00, 579.00, 307.00, 694.00, 298.00]) #Desired pixel points location
+        pt_star = np.array([592.00, 316.00, 682.00, 309.00, 688.00, 399.00, 599.00, 406.00]) #Desired pixel points location
 
         s_star = pt_star - np.array([cu,cv,cu,cv,cu,cv,cu,cv])
 
@@ -93,34 +93,21 @@ def Feature_vec(data):
 
         heading_error = np.arctan2(np.sin(alpha-alpha_star), np.cos(alpha-alpha_star))
 
-        print(heading_error)
         
-        # e_v is 3x1 error vector
         V_c_body =  K*e_v
 
-  
-        # Transforming to inertial NED frame
-        q = orientation
-        # only need to perform yaw rotation, due to active stabilization
-        # of the drone
-        yaw = tf.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])[2]
-        R = np.array([[cos(yaw), -sin(yaw), 0],
-                            [sin(yaw), cos(yaw), 0],
-                            [0, 0, 1]])
-        
-        
-        # apply rotation matrix to V_c_body
-        V_I = np.dot(R,V_c_body)
+        V_I = V_c_body
 
         V_omega = np.array([0,0,k_yaw * heading_error])
                 
         V_I = np.append(V_I,V_omega)
 
-        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,k_yaw * heading_error])
+        V_Q = np.array([-V_I[1],-V_I[0],-V_I[2],0,0,k_yaw * heading_error])
         
-        # make 6x1 array for errors 
         error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])     
-        print(error)
+        err = Float32MultiArray()
+        err.data = error
+        err_pub.publish(err)
 
 
 
@@ -131,51 +118,49 @@ def Controller():
     global error
     rospy.init_node("IBVS_Control", anonymous=False)
     rospy.Subscriber("/aruco_coordinates", Int32MultiArray, Feature_vec)
-    err_pub = rospy.Publisher("/tracking_error", Float32MultiArray, queue_size=10)
-    vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
+    vel_pub = rospy.Publisher("/mavros/setpoint_raw/local", PositionTarget, queue_size=10)
 
-    #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
-    rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
-    rate = rospy.Rate(60) # 25hz
+    rate = rospy.Rate(50) # 25hz
     while not rospy.is_shutdown():
          data = V_Q #np.array([0,0,0,0,0,0])
          #print(data)
-         vel_cmd = TwistStamped()
+         msg = PositionTarget()
+         msg.header.stamp = rospy.Time.now()
+         msg.header.frame_id = "world"
+         msg.coordinate_frame = 8
+         msg.type_mask = 1991
          v_lin_max = 1
          v_lin_max_z = 0.6
-         v_ang_max = pi/3
+         v_ang_max =pi/3
          if data[0]>v_lin_max:
-                vel_cmd.twist.linear.x = v_lin_max
+                msg.velocity.x = v_lin_max
          elif data[0]<-v_lin_max:
-                vel_cmd.twist.linear.x = -v_lin_max
+                msg.velocity.x = -v_lin_max
          else:
-                vel_cmd.twist.linear.x = data[0]
+                msg.velocity.x = data[0]
          if data[1]>v_lin_max:
-                vel_cmd.twist.linear.y = v_lin_max
+                msg.velocity.y = v_lin_max
          elif data[1]<-v_lin_max:
-                vel_cmd.twist.linear.y = -v_lin_max
+                msg.velocity.y = -v_lin_max
          else:
-                vel_cmd.twist.linear.y = data[1]
+                msg.velocity.y = data[1]
          if data[2]>v_lin_max_z:
-                vel_cmd.twist.linear.z = v_lin_max_z
+                msg.velocity.z = v_lin_max_z
          elif data[2]<-v_lin_max_z:
-                vel_cmd.twist.linear.z = -v_lin_max_z
+                msg.velocity.z = -v_lin_max_z
          else:
-                vel_cmd.twist.linear.z =  data[2]
+                msg.velocity.z = data[2]
          if data[5]>v_ang_max:
-                vel_cmd.twist.angular.z = v_ang_max
+                msg.yaw_rate = v_ang_max
          elif data[5]<-v_ang_max:
-                vel_cmd.twist.angular.z = -v_ang_max
+                msg.yaw_rate = -v_ang_max
          else:
-                vel_cmd.twist.angular.z = data[5]
+                msg.yaw_rate = data[5]
        
          #vel_cmd.twist.angular.x = 0.0
          #vel_cmd.twist.angular.y = 0.0
-         vel_pub.publish(vel_cmd)
+         vel_pub.publish(msg)
          # publish tracking error
-         err = Float32MultiArray()
-         err.data = error
-         err_pub.publish(err)
          
          rate.sleep()
 
