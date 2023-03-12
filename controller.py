@@ -37,7 +37,7 @@ def Feature_vec(data):
         cu = 640
         cv = 360
         f =  954 # Pixels
-        K = np.array([0.22, 0.22, 0.2])
+        K = np.array([0.42, 0.42, 0.2])
         k_yaw = -0.2
 
         global V_Q
@@ -47,7 +47,7 @@ def Feature_vec(data):
         # Image measurements of point features 
         s = data.data
 
-        pt_star = np.array([703.00, 413.00, 589.00, 423.00, 579.00, 307.00, 694.00, 298.00]) #Desired pixel points location
+        pt_star = np.array([592.00, 316.00, 682.00, 309.00, 688.00, 399.00, 599.00, 406.00]) #Desired pixel points location
 
         s_star = pt_star - np.array([cu,cv,cu,cv,cu,cv,cu,cv])
 
@@ -93,17 +93,28 @@ def Feature_vec(data):
 
         heading_error = np.arctan2(np.sin(alpha-alpha_star), np.cos(alpha-alpha_star))
 
-        print(heading_error)
+        #print(heading_error)
         
         # e_v is 3x1 error vector
         V_c_body =  K*e_v
 
-  
+
+       # rotate V_c_body 180 degrees about x axis
+        V_ENU_BODY_ROT_MATRIX = np.array([[1,0,0],
+                                   [0,-1,0],
+                                   [0,0,-1]])
+        
+        
+        # converting velocities from image to BODY ENU
+
+        V_c_body = np.dot(V_ENU_BODY_ROT_MATRIX,V_c_body)
+        
         # Transforming to inertial NED frame
         q = orientation
         # only need to perform yaw rotation, due to active stabilization
         # of the drone
-        yaw = tf.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])[2]
+        yaw =-(pi/2 - tf.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])[2])
+        print(yaw)
         R = np.array([[cos(yaw), -sin(yaw), 0],
                             [sin(yaw), cos(yaw), 0],
                             [0, 0, 1]])
@@ -111,16 +122,17 @@ def Feature_vec(data):
         
         # apply rotation matrix to V_c_body
         V_I = np.dot(R,V_c_body)
-
+        
         V_omega = np.array([0,0,k_yaw * heading_error])
                 
         V_I = np.append(V_I,V_omega)
 
-        V_Q = np.array([V_I[1],V_I[0],-V_I[2],0,0,k_yaw * heading_error])
+        V_Q = np.array([V_I[0],V_I[1],V_I[2],0,0,k_yaw * heading_error])
         
         # make 6x1 array for errors 
-        error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])     
-        print(error)
+        error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])
+        print("VQ",V_Q)     
+        #print(error)
 
 
 
@@ -136,7 +148,7 @@ def Controller():
 
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
     rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
-    rate = rospy.Rate(60) # 25hz
+    rate = rospy.Rate(50) # 25hz
     while not rospy.is_shutdown():
          data = V_Q #np.array([0,0,0,0,0,0])
          #print(data)
