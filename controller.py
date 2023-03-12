@@ -37,8 +37,8 @@ def Feature_vec(data):
         cu = 640
         cv = 360
         f =  954 # Pixels
-        K = np.array([0.42, 0.42, 0.2])
-        k_yaw = -0.2
+        K = np.array([0.4, 0.4, 0.22])
+        k_yaw = -0.25
 
         global V_Q
         global orientation
