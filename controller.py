@@ -13,7 +13,7 @@ from math import cos, exp, pi, sin
 
 
 
-global V_Q,V_I, error
+global V_Q,V_I, error,velocity
 global orientation 
 
 
@@ -25,6 +25,14 @@ V_Q = np.array([0,0,0,0,0,0])
 
 V_I = np.array([0,0,0,0,0,0])
 
+
+def velocity_callback(data):
+    global velocity
+    # data is in twist stamped format, extract linear velocity,angular velocity and print
+    velocity_east,velocity_north,velocity_up = data.twist.linear.x, data.twist.linear.y, data.twist.linear.z
+    angular_velocity_x,angular_velocity_y,angular_velocity_z = data.twist.angular.x, data.twist.angular.y, data.twist.angular.z
+    velocity = np.array([velocity_east,velocity_north,velocity_up,angular_velocity_x,angular_velocity_y,angular_velocity_z])
+    #print("velocity ",velocity)
 
 
 def pose_callback(pose):
@@ -146,7 +154,9 @@ def Controller():
     err_pub = rospy.Publisher("/tracking_error", Float32MultiArray, queue_size=10)
     vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
 
+    
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
+    rospy.Subscriber("/mavros/local_position/velocity_local", TwistStamped, velocity_callback)
     rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
     rate = rospy.Rate(50) # 25hz
     while not rospy.is_shutdown():
