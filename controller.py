@@ -62,9 +62,8 @@ def R_z(theta):
 def velocity_callback(data):
     global velocity
     # data is in Odometry format, extract linear velocity,angular velocity and print
-    
-    velocity_east,velocity_north,velocity_up = data.twist.linear.x, data.twist.linear.y, data.twist.linear.z
-    angular_velocity_x,angular_velocity_y,angular_velocity_z = data.twist.angular.x, data.twist.angular.y, data.twist.angular.z
+    velocity_east,velocity_north,velocity_up = data.twist.twist.linear.x, data.twist.twist.linear.y, -data.twist.twist.linear.z
+    angular_velocity_x,angular_velocity_y,angular_velocity_z = data.twist.twist.angular.x, data.twist.twist.angular.y, data.twist.twist.angular.z
     velocity = np.array([velocity_east,velocity_north,velocity_up,angular_velocity_x,angular_velocity_y,angular_velocity_z])
     #print("velocity ",velocity)
 
@@ -172,8 +171,7 @@ def Feature_vec(data):
        # e_v is 3x1 error vector
        V_c_body =  K*e_v + v_p_bar
 
-       if time_prev == 0:
-             print(v_p_bar)
+       print(v_p_bar)
        
 
 
