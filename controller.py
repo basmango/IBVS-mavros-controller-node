@@ -81,8 +81,8 @@ def Feature_vec(data):
        K = np.array([0.45, 0.45, 0.25])
        k_yaw = -0.25
        dT = (1/50)
-       gamma1 = 0.8
-       gamma2 = 0.8
+       gamma1 = 0.9
+       gamma2 = 0.9
        global V_Q
        global orientation
        global V_I
@@ -164,15 +164,13 @@ def Feature_vec(data):
        
        v_p_bar[2] = 0.0
        
-       print(dT)
-
+       
        #if dT == 0:
-       #       print(v_p_bar)
+       #       print()
        # e_v is 3x1 error vector
        V_c_body =  K*e_v + v_p_bar
 
-       if time_prev == 0:
-             print(v_p_bar)
+       print(v_p_bar)
        
 
 
@@ -259,7 +257,7 @@ def Controller():
          vel_cmd = TwistStamped()
          v_lin_max = 0.2
          v_lin_max_z = 0.15
-         v_ang_max = pi/3
+         v_ang_max = pi/6
          if data[0]>v_lin_max:
                 vel_cmd.twist.linear.x = v_lin_max
          elif data[0]<-v_lin_max:
