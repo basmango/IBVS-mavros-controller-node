@@ -61,7 +61,8 @@ def R_z(theta):
 
 def velocity_callback(data):
     global velocity
-    # data is in twist stamped format, extract linear velocity,angular velocity and print
+    # data is in Odometry format, extract linear velocity,angular velocity and print
+    
     velocity_east,velocity_north,velocity_up = data.twist.linear.x, data.twist.linear.y, data.twist.linear.z
     angular_velocity_x,angular_velocity_y,angular_velocity_z = data.twist.angular.x, data.twist.angular.y, data.twist.angular.z
     velocity = np.array([velocity_east,velocity_north,velocity_up,angular_velocity_x,angular_velocity_y,angular_velocity_z])
@@ -250,7 +251,8 @@ def Controller():
    
     
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
-    rospy.Subscriber("/mavros/local_position/velocity_local", TwistStamped, velocity_callback)
+    rospy.Subscriber("/mavros/global_position/local", Odometry, velocity_callback)
+    
     rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
     rate = rospy.Rate(55) # 25hz
     while not rospy.is_shutdown():
