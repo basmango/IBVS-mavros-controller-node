@@ -78,7 +78,7 @@ def Feature_vec(data):
        cu = 640
        cv = 360
        f =  954 # Pixels
-       K = np.array([0.45, 0.45, 0.25])
+       K = np.array([0.45, 0.45, 0.48])
        k_yaw = -0.25
        dT = (1/50)
        gamma1 = 0.9
@@ -110,7 +110,7 @@ def Feature_vec(data):
       
        # Image measurements of point features 
        s = data.data
-       pt_star = np.array([592.00, 316.00, 682.00, 309.00, 688.00, 399.00, 599.00, 406.00]) #Desired pixel points location
+       pt_star = np.array([626.0, 340.0, 653.0, 340.0, 653.0, 368.0, 626.0, 367.0]) #Desired pixel points location
        s_star = pt_star - np.array([cu,cv,cu,cv,cu,cv,cu,cv])
        #Virtual Plane Conversion
        vs1 = np.array([s[0]-cu, s[1]-cv])
@@ -123,7 +123,7 @@ def Feature_vec(data):
               
 
        # Image Moment Based Features 
-       h_d = 0.98
+       h_d = 3.16
        x_g = (vs1[0]+vs2[0]+vs3[0]+vs4[0])/4
        y_g = (vs1[1]+vs2[1]+vs3[1]+vs4[1])/4
        x_g_star = (s_star[0] + s_star[2] + s_star[4] + s_star[6])/4
@@ -221,7 +221,7 @@ def Feature_vec(data):
        est_vel = Float32MultiArray()
        est_vel.data = np.array(v_p_bar,dtype=np.float32)
        est_vel_pub.publish(est_vel)
-       
+       print(e_v[2])
        error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])
        #print(error)
        alpha1 = exp(-(1/gamma1)*dT)
