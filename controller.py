@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 import rospy
 import sys
@@ -14,13 +13,14 @@ from math import cos, exp, pi, sin
 
 
 
-global V_Q,V_I, error,velocity, e_fs_prev, h_s_prev, e_fpsi_prev, h_psi_prev
+global V_Q,V_I, error,velocity, e_fs_prev, h_s_prev, e_fpsi_prev, h_psi_prev,est_vel1
 global orientation 
 global est_vel_pub
 
 
 error  = np.array([0,0,0,0,0,0],dtype=np.float32)
 velocity  = np.array([0,0,0,0,0,0],dtype=np.float32)
+est_vel1 = np.array([0,0,0,0,0,0],dtype=np.float32)
 global ev_0
 global time_now,time_prev
 ev_0 = None
@@ -78,15 +78,15 @@ def Feature_vec(data):
        cu = 640
        cv = 360
        f =  954 # Pixels
-       K = np.array([0.45, 0.45, 0.48])
-       k_yaw = -0.25
+       K = np.array([0.4, 0.4, 0.4])
+       k_yaw = -0.30
        dT = (1/50)
-       gamma1 = 0.9
-       gamma2 = 0.9
+       gamma1 = 0.7
+       gamma2 = 0.7
        global V_Q
        global orientation
        global V_I
-       global error 
+       global error,est_vel1
        global velocity
        global e_fs_prev,e_fs_current,e_fpsi_current,e_fpsi_prev
        global h_s_prev,h_s_current,h_psi_current,h_psi_prev
@@ -104,13 +104,12 @@ def Feature_vec(data):
        time_prev = time_now
 
        q = orientation
-
               
 
       
        # Image measurements of point features 
        s = data.data
-       pt_star = np.array([626.0, 340.0, 653.0, 340.0, 653.0, 368.0, 626.0, 367.0]) #Desired pixel points location
+       pt_star = np.array([619.0, 338.0, 661.0, 340.0, 662.0, 384.0, 617.0, 383.0]) #Desired pixel points location
        s_star = pt_star - np.array([cu,cv,cu,cv,cu,cv,cu,cv])
        #Virtual Plane Conversion
        vs1 = np.array([s[0]-cu, s[1]-cv])
@@ -123,7 +122,7 @@ def Feature_vec(data):
               
 
        # Image Moment Based Features 
-       h_d = 3.16
+       h_d = 2.01
        x_g = (vs1[0]+vs2[0]+vs3[0]+vs4[0])/4
        y_g = (vs1[1]+vs2[1]+vs3[1]+vs4[1])/4
        x_g_star = (s_star[0] + s_star[2] + s_star[4] + s_star[6])/4
@@ -169,61 +168,34 @@ def Feature_vec(data):
        #       print()
        # e_v is 3x1 error vector
        V_c_body =  K*e_v + v_p_bar
-
-       print(v_p_bar)
-       
-
-
-
-       # rotate V_c_body 180 degrees about x axis
-       V_ENU_BODY_ROT_MATRIX = np.array([[1,0,0],
-                                   [0,-1,0],
-                                   [0,0,-1]])
-        
-        
-       # converting velocities from image to BODY ENU
-
-       V_c_body = np.dot(V_ENU_BODY_ROT_MATRIX,V_c_body)
-        
-       # Transforming to inertial NED frame
-       # only need to perform yaw rotation, due to active stabilization
-       # of the drone
-       yaw =-(pi/2 - tf.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])[2])
-       
-       R = np.array([[cos(yaw), -sin(yaw), 0],
-                            [sin(yaw), cos(yaw), 0],
-                            [0, 0, 1]])
-
-
         
        # apply rotation matrix to V_c_body
-       V_I = np.dot(R,V_c_body)
+       V_I = np.matmul(R_V_I,V_c_body)
        
        # Filter signal for Angular Velocity
        h_psi = velocity[5]
 
        # Dynamic Surface Filter 
-       alpha2 = (dT/(gamma2 + dT))
-       e_fpsi_current = (1-alpha2)*e_fpsi_prev + alpha2*heading_error
-       h_psi_current =  (1-alpha2)*h_psi_prev + alpha2*h_psi 
+       alpha2 = exp((-1/gamma2)*dT)
+       e_fpsi_current = alpha2*e_fpsi_prev + (1-alpha2)*heading_error
+       h_psi_current =  alpha2*h_psi_prev + (1-alpha2)*h_psi 
 
        psi_p_bar = h_psi_current + (1/gamma2)*np.subtract(heading_error,e_fpsi_current)
        
        
-       V_omega = np.array([0,0,k_yaw * heading_error])
+       V_omega = np.array([0,0,k_yaw * heading_error-psi_p_bar])
                
        V_I = np.append(V_I,V_omega)
        
       
-       V_Q = np.array([V_I[0],V_I[1],V_I[2],0,0,k_yaw * heading_error])
+       V_Q = np.array([V_I[0],V_I[1],V_I[2],0,0,V_I[5]])
        
        # make 6x1 array for errors 
-       est_vel = Float32MultiArray()
-       est_vel.data = np.array(v_p_bar,dtype=np.float32)
-       est_vel_pub.publish(est_vel)
-       print(e_v[2])
+       est_vel1 = np.array(v_p_bar,dtype=np.float32)
+       est_vel1 = np.append(est_vel1,psi_p_bar)
+       
        error = np.array([e_v[0],e_v[1],e_v[2],0,0,heading_error])
-       #print(error)
+       print(est_vel1)
        alpha1 = exp(-(1/gamma1)*dT)
        #v_bar = K*e_v + v_p_bar
        v_bar = np.matmul(np.transpose(R_V_I),lin_vel)
@@ -239,49 +211,49 @@ def Controller():
     global V_Q
     global orientation
     global error
-    global est_vel_pub
+    global est_vel_pub,est_vel1
     rospy.init_node("IBVS_Control", anonymous=False)
     rospy.Subscriber("/aruco_coordinates", Int32MultiArray, Feature_vec)
     err_pub = rospy.Publisher("/tracking_error", Float32MultiArray, queue_size=10)
-    vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel", TwistStamped, queue_size=10)
+    vel_pub = rospy.Publisher("/mavros/setpoint_velocity/cmd_vel_unstamped", Twist, queue_size=10)
     est_vel_pub = rospy.Publisher("/estimated_velocity", Float32MultiArray, queue_size=10)
    
     
     #vel_pub = rospy.Publisher("/hector/cmd_vel", Twist, queue_size=10)
     rospy.Subscriber("/mavros/local_position/velocity_local", TwistStamped, velocity_callback)
     rospy.Subscriber('/mavros/local_position/pose', PoseStamped, pose_callback)
-    rate = rospy.Rate(55) # 25hz
+    rate = rospy.Rate(30) # 25hz
     while not rospy.is_shutdown():
          data = V_Q #np.array([0,0,0,0,0,0])
          #print(data)
-         vel_cmd = TwistStamped()
-         v_lin_max = 0.2
+         vel_cmd = Twist()
+         v_lin_max = 0.25
          v_lin_max_z = 0.15
          v_ang_max = pi/6
          if data[0]>v_lin_max:
-                vel_cmd.twist.linear.x = v_lin_max
+                vel_cmd.linear.x = v_lin_max
          elif data[0]<-v_lin_max:
-                vel_cmd.twist.linear.x = -v_lin_max
+                vel_cmd.linear.x = -v_lin_max
          else:
-                vel_cmd.twist.linear.x = data[0]
+                vel_cmd.linear.x = data[0]
          if data[1]>v_lin_max:
-                vel_cmd.twist.linear.y = v_lin_max
+                vel_cmd.linear.y = v_lin_max
          elif data[1]<-v_lin_max:
-                vel_cmd.twist.linear.y = -v_lin_max
+                vel_cmd.linear.y = -v_lin_max
          else:
-                vel_cmd.twist.linear.y = data[1]
+                vel_cmd.linear.y = data[1]
          if data[2]>v_lin_max_z:
-                vel_cmd.twist.linear.z = v_lin_max_z
+                vel_cmd.linear.z = v_lin_max_z
          elif data[2]<-v_lin_max_z:
-                vel_cmd.twist.linear.z = -v_lin_max_z
+                vel_cmd.linear.z = -v_lin_max_z
          else:
-                vel_cmd.twist.linear.z =  data[2]
+                vel_cmd.linear.z =  data[2]
          if data[5]>v_ang_max:
-                vel_cmd.twist.angular.z = v_ang_max
+                vel_cmd.angular.z = v_ang_max
          elif data[5]<-v_ang_max:
-                vel_cmd.twist.angular.z = -v_ang_max
+                vel_cmd.angular.z = -v_ang_max
          else:
-                vel_cmd.twist.angular.z = data[5]
+                vel_cmd.angular.z = data[5]
        
          #vel_cmd.twist.angular.x = 0.0
          #vel_cmd.twist.angular.y = 0.0
@@ -290,6 +262,10 @@ def Controller():
          err = Float32MultiArray()
          err.data = error
          err_pub.publish(err)
+         est_vel = Float32MultiArray()
+         est_vel.data = est_vel1
+         est_vel_pub.publish(est_vel)
+       
          
          rate.sleep()
 
