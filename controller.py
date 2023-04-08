@@ -227,7 +227,7 @@ def Controller():
          data = V_Q #np.array([0,0,0,0,0,0])
          #print(data)
          vel_cmd = Twist()
-         v_lin_max = 0.25
+         v_lin_max = 0.3
          v_lin_max_z = 0.15
          v_ang_max = pi/6
          if data[0]>v_lin_max:

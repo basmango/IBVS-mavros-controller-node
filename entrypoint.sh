@@ -1,3 +1,3 @@
 . /opt/ros/noetic/setup.sh
-rosrun mavros mavsys rate --position 60 &&
+rosrun mavros mavsys rate --position 200 &&
 /bin/bash
